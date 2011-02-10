@@ -1,0 +1,53 @@
+== ContractAcceptanceFramework
+
+This gem is meant to be used to allow ActiveRecord objects to signify agreement with versioned contracts.  It requires some database tables.
+
+To that end, you need a migration that looks something like this:
+
+class CreateContractAcceptanceFrameworkTables < ActiveRecord::Migration
+  def self.up
+    create_table :contracts do |t|
+      t.string :key
+      t.text :content
+      t.integer :major_version
+      t.integer :minor_version
+      t.integer :maintenance_version
+      t.timestamps
+    end
+    add_index :contracts, [:major_version, :minor_version, :maintenance_version, :key], :name => 'contracts_version_index'
+    add_index :contracts, [:key]
+
+    create_table :contract_acceptances do |t|
+      t.integer :contract_id
+      t.timestamps
+      t.integer :acceptable_id
+      t.string  :acceptable_type
+    end
+    add_index :contract_acceptances, [:acceptable_id, :acceptable_type]
+    add_index :contract_acceptances, :contract_id
+  end
+
+  def self.down
+    remove_index :contract_acceptances, :column => :contract_id
+    remove_index :contract_acceptances, :column => [:acceptable_id, :acceptable_type]
+    drop_table :contract_acceptances
+
+    remove_index :contracts, :column => [:key]
+    remove_index :contracts, 'contracts_version_index'
+    drop_table :contracts
+  end
+end
+
+After that, you just include a module in your class that accepts contracts like so:
+
+class SomeClass < ActiveRecord::Base
+  include ContractAcceptanceFramework
+end
+
+That's it, you're done.  Now the class will respond to the following methods:
+
+    # where version looks like '1.2.3' and will be parsed into the appropriate major, minor, maintenance query
+    - has_agreed_to?(contract)
+    - agree_to!(contract)
+
+If you've already agreed to a contract and try to agree again, it will raise a ContractDuplicateAgreementError
